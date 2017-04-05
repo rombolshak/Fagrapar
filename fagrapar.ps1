@@ -7,21 +7,6 @@ Set-StrictMode -Version "3.0"
 $ErrorActionPreference = "Stop"
 Import-Module $PSScriptRoot\SplitPipeline
 
-function ProcessLink($uri, $proxy, $output)
-{
-    try 
-    {
-        Invoke-WebRequest -Uri $uri -Proxy $proxy -ProxyUseDefaultCredentials `
-        | ConvertFrom-Json `
-        | Export-Csv -Encoding UTF8 -NoTypeInformation -Path $output -Append
-    }
-    catch
-    {
-        Write-Host "$($_.Exception.Message) URI: $($uri.Substring(0, 50))..."
-    }
-}
-
-
 if (-not (Test-Path $InputFile))
 {
     throw "No such file: $InputFile"
@@ -51,19 +36,29 @@ Write-Host Output file is $OutputFile
 $links = Get-Content $InputFile
 $data = @{
     proxy=$Proxy; 
-    output = $OutputFile;
     done = 0;
     total = $links.Count;
+    currentDir = $PSScriptRoot;
 }
 
-$links | Split-Pipeline -Variable data -Script `
-{process{ 
+$links | Split-Pipeline -Variable data, OutputFile -Verbose -Script `
+{process{
+
+    Import-Module "$($data.currentDir)\LockObject"
+    function ExecuteInMonitor($lock, [scriptblock]$script)
+    {
+        [System.Threading.Monitor]::Enter($lock)
+        try { &$script }
+        finally {[System.Threading.Monitor]::Exit($lock)}
+    }
+
     $uri = $_
     try 
     {
         Invoke-WebRequest -Uri $uri -Proxy $data.proxy -ProxyUseDefaultCredentials `
         | ConvertFrom-Json `
-        | Export-Csv -Encoding UTF8 -NoTypeInformation -Path $data.output -Append
+        | Export-Csv -Encoding UTF8 -NoTypeInformation -Path $OutputFile -Append
+        Start-Sleep 1000
     }
     catch
     {
@@ -71,9 +66,7 @@ $links | Split-Pipeline -Variable data -Script `
     }
     finally
     {
-        [System.Threading.Monitor]::Enter($data)
-	    try { $done = ++$data.Done }
-	    finally {[System.Threading.Monitor]::Exit($data)}
+        Lock-Object $data { $done = ++$data.Done } -Verbose
         Write-Progress -Activity "Done $done" -Status Processing -PercentComplete (100*$done/$data.total)
     }
 }}
