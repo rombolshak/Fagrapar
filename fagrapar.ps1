@@ -66,7 +66,7 @@ $resultsDirectory = New-Item `
 function CollectResults()
 {
 	Write-Host "Creaing result file"
-	Get-ChildItem $resultsDirectory |% { Import-Csv $_.FullName } | Export-Csv -Encoding UTF8 -NoTypeInformation -Path $OutputFile
+	Get-ChildItem $resultsDirectory |% { Import-Csv $_.FullName | Export-Csv -Encoding UTF8 -NoTypeInformation -Path $OutputFile -Append -Force }
 	Write-Host "Clear temp results directory"
 	Remove-Item $resultsDirectory -Recurse -Force
 	Write-Host "Done"
