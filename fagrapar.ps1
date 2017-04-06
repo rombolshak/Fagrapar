@@ -2,6 +2,7 @@
 	[Parameter(Mandatory=$true)][string]$InputFile,
 	[Parameter(Mandatory=$true)][string]$Proxy = $null,
 	[string]$OutputFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "results.csv")),
+	[string]$FailedFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "failed.txt")),
 	[int]$RetryCount = 1,
 	[switch]$JustCollectResults)
 
@@ -58,7 +59,7 @@ try
 		currentDir = $PSScriptRoot;
 	}
 
-	$links | Split-Pipeline -Variable data, resultsDirectory -Script `
+	$links | Split-Pipeline -Variable data, resultsDirectory, FailedFile -Script `
 	{process{
 
 		Import-Module "$($data.currentDir)\LockObject"
@@ -86,7 +87,16 @@ try
 			}
 		}
 
-		Lock-Object $data { $done = ++$data.done; if (!$success) {++$data.failed} }
+		Lock-Object $data `
+		{ 
+			$done = ++$data.done
+			if (!$success) 
+			{
+				++$data.failed
+				$uri | Out-File $FailedFile -Append
+			} 
+		}
+
 		Write-Progress -Activity "Done $done of $($data.total)" -Status Processing -PercentComplete (100*$done/$data.total)			
 	}}
 }
