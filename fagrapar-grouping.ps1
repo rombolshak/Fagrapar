@@ -48,6 +48,7 @@ Param(
 	[string]$FailedFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "failed.txt")), # here failed requests links will be written
 	[int]$RetryCount = 1, # how many times retry request on any error
 	[switch]$JustCollectResults, # do not request links, get result from previous crashed run
+	[string]$GroupingField = "data")
 
 Set-StrictMode -Version "3.0"	
 $ErrorActionPreference = "Stop"
@@ -106,6 +107,7 @@ try
 		failed = 0;
 		total = $links.Count;
 		currentDir = $PSScriptRoot;
+		groupingField = $GroupingField;
 	} # $data is just some object with settings and statistics
 	
 	# Split-Pipeline gives all links executes the -Script part in parallel. Default parallel degree is processor count.
