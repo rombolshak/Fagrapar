@@ -48,7 +48,7 @@ Param(
 	[string]$FailedFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "failed.txt")), # here failed requests links will be written
 	[int]$RetryCount = 1, # how many times retry request on any error
 	[switch]$JustCollectResults, # do not request links, get result from previous crashed run
-	[string]$GroupingField = "data")
+	[string]$GroupingField = "data") # field that have an array of data needed
 
 Set-StrictMode -Version "3.0"	
 $ErrorActionPreference = "Stop"
@@ -99,7 +99,7 @@ $null | Out-File $FailedFile # clear errors file
 try
 {
 	Write-Host Output file is $OutputFile
-	$links = Get-Content $InputFile # here is where file with links is being read entirely
+	$links = @(Get-Content $InputFile) # here is where file with links is being read entirely
 	$data = @{
 		proxy = $Proxy; 
 		retryCount = $RetryCount;
