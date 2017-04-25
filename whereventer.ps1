@@ -46,6 +46,7 @@ Param(
 	[Parameter(Mandatory=$true)][string]$Proxy, # proxy address in format 'http(s)://address:port'. Do not forget http://!
 	[string]$OutputFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "results.csv")), # resulting csv file
 	[string]$FailedFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "failed.txt")), # here failed requests links will be written
+    [string]$CompletedFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "completed.txt")), # here failed requests links will be written
 	[int]$RetryCount = 1, # how many times retry request on any error
 	[switch]$JustCollectResults) # do not request links, get result from previous crashed run
 
@@ -99,6 +100,7 @@ try
 {
 	Write-Host Output file is $OutputFile
 	$links = Get-Content $InputFile # here is where file with links is being read entirely
+    $null | Out-File $CompletedFile
 	$data = @{
 		proxy = $Proxy; 
 		retryCount = $RetryCount;
@@ -112,7 +114,7 @@ try
 	# You may want to increase it, so specify -Count parameter before -Variable (i.e Split-Pipeline -Count 10 -Variable ...)
 	# Increasing parallelism degree does not guarantee an increase in speed. 
 	# In some cases it can even slow down execution or lead to ban from API.
-	$links | Split-Pipeline -Variable data, resultsDirectory, FailedFile -Script `
+	$links | Split-Pipeline -Variable data, resultsDirectory, FailedFile, CompletedFile -Script `
 	{process{
 
 		# from here starts processing of one link 
@@ -129,10 +131,8 @@ try
 			try 
 			{
 				# this is the main logic.
-				$response = Invoke-WebRequest -Uri $uri -Verbose # -Proxy $data.proxy -ProxyUseDefaultCredentials
-                Write-Host "Response here"
+				$response = Invoke-WebRequest -Uri $uri -Verbose -Proxy $data.proxy -ProxyUseDefaultCredentials                
 				$events = $response.AllElements | where { $_.class -eq "listing_item event" }
-                Write-Host Received $($events.Count) events
                 $events |% {
                     $divs = $_.innerHTML -split "<div"
                     [PsCustomObject]@{
@@ -144,7 +144,7 @@ try
                         femaleCount = (($divs[6] -split "count`">")[1] -split "</")[0];
                         maleCount = (($divs[7] -split "count`">")[1] -split "</")[0];
                      }
-                }# | Export-Csv -Encoding UTF8 -NoTypeInformation -Path "$resultsDirectory\$id.csv"
+                } | Export-Csv -Encoding UTF8 -NoTypeInformation -Path "$resultsDirectory\$id.csv"
 				$success = $true
 			}
 			catch
@@ -159,12 +159,17 @@ try
 		Lock-Object $data `
 		{ 
 			$done = ++$data.done
+            Write-Host $uri processed. Success = $success
 			if (!$success) 
 			{
 				++$data.failed
 				$uri | Out-File $FailedFile -Append # here we write failed request link to errors file
-			} 
-		} -Verbose
+			}
+            else 
+            {
+                $uri | Out-File $CompletedFile -Append
+            }
+		}
 
 		Write-Progress -Activity "Done $done of $($data.total)" -Status Processing -PercentComplete (100*$done/$data.total)			
 	}}
