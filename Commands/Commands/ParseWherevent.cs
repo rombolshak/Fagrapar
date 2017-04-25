@@ -1,5 +1,6 @@
 ﻿using System.Management.Automation;
-using AngleSharp;
+using System.Net;
+using AngleSharp.Parser.Html;
 
 namespace Commands
 {
@@ -9,10 +10,12 @@ namespace Commands
 		[Parameter(Mandatory = true)]
 		public string Url { get; set; }
 
-		protected override async void ProcessRecord()
+		protected override void ProcessRecord()
 		{
-			var config = Configuration.Default.WithDefaultLoader();
-			var document = await BrowsingContext.New(config).OpenAsync(Url);
+			var client = new WebClient();
+			var response = client.DownloadString(Url);
+			var parser = new HtmlParser();
+			var document = parser.Parse(response);
 			var events = document.QuerySelectorAll(".event");
 			foreach (var @event in events)
 			{
@@ -21,7 +24,7 @@ namespace Commands
 					Thumb = @event.QuerySelector("img").Attributes["src"],
 					Title = @event.QuerySelector(".event_title").TextContent,
 					DateTime = @event.QuerySelector("time").Attributes["datetime"],
-					Location = @event.QuerySelector(".event_location").TextContent,
+					Location = @event.QuerySelector(".event_location").TextContent.Trim(),
 					FemaleCount = @event.QuerySelector(".event_femalecount").TextContent,
 					MaleCount = @event.QuerySelector(".event_malecount").TextContent
 				});
