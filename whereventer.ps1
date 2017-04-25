@@ -84,15 +84,6 @@ if (-not (Test-Path $InputFile))
 	throw "No such file: $InputFile"
 }
 
-if (Test-Path $OutputFile)
-{
-	Write-Host 'Output file is already exists, it will be rewritten and old results will be deleted'
-	Write-Host 'Press Enter to continue or Ctrl+C to cancel'
-	Read-Host 
-	Remove-Item $OutputFile
-	Get-ChildItem $resultsDirectory | Remove-Item -Force
-}
-
 $stopwatch = [system.diagnostics.stopwatch]::StartNew() # start timer for statistics
 $null | Out-File $FailedFile # clear errors file 
 
@@ -100,7 +91,35 @@ try
 {
 	Write-Host Output file is $OutputFile
 	$links = Get-Content $InputFile # here is where file with links is being read entirely
-    $null | Out-File $CompletedFile
+    
+    if (Test-Path $CompletedFile)
+    {
+        Write-Host "Found file with completed urls. Do you want to consider it and exclude these urls from input file? [Y|N]"
+        Write-Host "Completed urls file will be deleted unless you type 'Y' symbol"
+        $choice = Read-Host
+        if ($choice -eq 'n' -or $choice -eq 'N')
+        {
+            Remove-Item $CompletedFile
+        }
+        else
+        {
+            $comletedLinks = Get-Content $CompletedFile
+            $links = @($links |? { $comletedLinks -notcontains $_ })
+            Move-Item $OutputFile "$resultsDirectory\$(New-Guid).csv" -ErrorAction SilentlyContinue
+        }
+    }    
+
+    if (Test-Path $OutputFile)
+    {
+	    Write-Host 'Output file is already exists, it will be rewritten and old results will be deleted'
+	    Write-Host 'Press Enter to continue or Ctrl+C to cancel'
+	    Read-Host 
+	    Remove-Item $OutputFile
+	    Get-ChildItem $resultsDirectory | Remove-Item -Force
+    }
+
+
+
 	$data = @{
 		proxy = $Proxy; 
 		retryCount = $RetryCount;
@@ -131,7 +150,7 @@ try
 			try 
 			{
 				# this is the main logic.
-				$response = Invoke-WebRequest -Uri $uri -Verbose -Proxy $data.proxy -ProxyUseDefaultCredentials                
+				$response = Invoke-WebRequest -Uri $uri -Proxy $data.proxy -ProxyUseDefaultCredentials                
 				$events = $response.AllElements | where { $_.class -eq "listing_item event" }
                 $events |% {
                     $divs = $_.innerHTML -split "<div"
@@ -151,7 +170,7 @@ try
 			{
 				# we will fall here if any failure occured, no matter of origin: network problem or API reject.
 				# in case of API failure there is no logging of detailed message, just something like "400 Bad Request" or "404 Not Found"
-				Write-Host "Attempt $attemptNumber. $($_.Exception.Message) URI: $($uri.Substring(0, 50))..."
+				Write-Host "Attempt $attemptNumber. $($_.Exception.Message) URI: $uri"
 			}
 		}
 
