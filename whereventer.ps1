@@ -58,7 +58,7 @@ Param(
 
 Set-StrictMode -Version "3.0"	
 $ErrorActionPreference = "Stop"
-Import-Module $PSScriptRoot\SplitPipeline
+Import-Module $PSScriptRoot\lib\SplitPipeline
 
 # here temp results will be stored, so create directory
 $resultsDirectory = New-Item `
@@ -143,8 +143,8 @@ try
 	{process{
 
 		# from here starts processing of one link 
-		Import-Module "$($data.currentDir)\LockObject"
-		. "$($data.currentDir)\ConvertTo-FlatObject.ps1"
+		Import-Module "$($data.currentDir)\lib\LockObject"
+		Import-Module "$($data.currentDir)\lib\Commands.dll"
 		$uri = $_
 		$attemptNumber = 0
 		$success = $false
@@ -155,21 +155,8 @@ try
 			++$attemptNumber;
 			try 
 			{
-				# this is the main logic.
-				$response = Invoke-WebRequest -Uri $uri -Proxy $data.proxy -ProxyUseDefaultCredentials                
-				$events = $response.AllElements | where { $_.class -eq "listing_item event" }
-                $events |% {
-                    $divs = $_.innerHTML -split "<div"
-                    [PsCustomObject]@{
-                        url = $uri;
-                        thumb = (($divs[1] -split "src=`"")[-1] -split "`" ")[0];
-                        title = (($divs[2] -split ">")[2] -split "</")[0];
-                        datetime = (($divs[5] -split "datetime=`"")[1] -split "`"")[0];
-                        location = (($divs[9] -split "location`">")[1] -split "</")[0];
-                        femaleCount = (($divs[6] -split "count`">")[1] -split "</")[0];
-                        maleCount = (($divs[7] -split "count`">")[1] -split "</")[0];
-                     }
-                } | Export-Csv -Encoding UTF8 -NoTypeInformation -Path "$resultsDirectory\$id.csv"
+                # Parse-Wherevent is located in lib/Commands.dll module
+				Parse-Wherevent -Url $uri | Export-Csv -Encoding UTF8 -NoTypeInformation -Path "$resultsDirectory\$id.csv"
 				$success = $true
 			}
 			catch
