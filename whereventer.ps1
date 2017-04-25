@@ -8,7 +8,7 @@ This will generate file named results.csv in current directory. If there were an
 If you want another results file, specify it with -OutputFile parameter. 
 Example: . .\whereventer.ps1 -InputFile .\links.txt -Proxy http://1.2.3.4:9000 -OutputFile G:\dir1\dir2\waka-waka.csv
 
-Same applies to error file, specify it with -FailedFile param.
+Same applies to error file, specify it with -FailedFile param, and completed urls file, -CompletedFile param.
 
 Any path can be passed in absolute (starts with drive letter) and relative format (starts with dot). 
 Relative paths are relative to current directory.
@@ -31,9 +31,15 @@ i.e:
 4) run . .\whereventer.ps1 -InputFile 'nomatter' -Proxy 'whocares' -OutputFile .\out.csv -JustCollectResults
 5) out.csv is generated, out directory is removed, no additional requests were made.
 
-If output file is already exists, it will be replaced with the new one. Script will prompt for confirmation.
+Each successfully processed link is placed to special file (-CompletedFile param, completed.txt by default).
+In case script was interrupted in the middle of the process, on the next run it will prompt for confirmation of whether to use this file or not.
+If you answer 'Y', script will calculate the difference between input file and completed links file, then processing only not completed links.
+Result file from previous run will be concatenated with the new one, so you will obtain full results file at once.
+If you answer 'N' this completed links file will be deleted and all the links from input file will be processed.
+
+If you answer 'N' and output file already contains some results, they will be deleted as well. Script will prompt for confirmation.
 If output file does not exists, but output directory is present (i.e. after pc crash) and you don't specify -JustCollectResults,
-requests will be run again, so result csv can contain duplicated. 
+requests will be run again, so result csv can contain duplicates. 
 If you don't want them, remove output directory manually or specify another output file.
 
 This is all major highlight of script behaviour. Comments below are describing details of algorithm.
