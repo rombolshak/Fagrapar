@@ -156,7 +156,7 @@ try
 			try 
 			{
                 # Parse-Wherevent is located in lib/Commands.dll module
-				Parse-Wherevent -Url $uri | Export-Csv -Encoding UTF8 -NoTypeInformation -Path "$resultsDirectory\$id.csv"
+				Parse-Wherevent -Url $uri -Proxy $data.proxy | Export-Csv -Encoding UTF8 -NoTypeInformation -Path "$resultsDirectory\$id.csv"
 				$success = $true
 			}
 			catch
