@@ -48,11 +48,12 @@ Param(
 	[string]$FailedFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "failed.txt")), # here failed requests links will be written
 	[int]$RetryCount = 1, # how many times retry request on any error
 	[switch]$JustCollectResults, # do not request links, get result from previous crashed run
-	[string]$GroupingField = "data") # field that have an array of data needed
+	[string]$GroupingField = "data", # field that have an array of data needed
+    [int]$SleepMs = 0) # how much to sleep after each successfull request
 
 Set-StrictMode -Version "3.0"	
 $ErrorActionPreference = "Stop"
-Import-Module $PSScriptRoot\SplitPipeline
+Import-Module $PSScriptRoot\lib\SplitPipeline
 
 # here temp results will be stored, so create directory
 $resultsDirectory = New-Item `
@@ -108,6 +109,7 @@ try
 		total = $links.Count;
 		currentDir = $PSScriptRoot;
 		groupingField = $GroupingField;
+        sleepMs = $SleepMs;
 	} # $data is just some object with settings and statistics
 	
 	# Split-Pipeline gives all links executes the -Script part in parallel. Default parallel degree is processor count.
@@ -118,9 +120,10 @@ try
 	{process{
 
 		# from here starts processing of one link 
-		Import-Module "$($data.currentDir)\LockObject"
-		. "$($data.currentDir)\ConvertTo-FlatObject.ps1"
-		$uri = $_
+		Import-Module "$($data.currentDir)\lib\LockObject"
+		. "$($data.currentDir)\lib\ConvertTo-FlatObject.ps1"
+		$linkId = $_ -split ";;" | select -First 1
+		$uri = $id = $_ -split ";;" | select -Last 1
 		$attemptNumber = 0
 		$success = $false
 		$id = [System.Guid]::NewGuid() # result of request will be stored in file with this id
@@ -147,15 +150,19 @@ try
 					-Proxy $data.proxy -ProxyUseDefaultCredentials `
 					| ConvertFrom-Json `
 					| Select-Object -ExpandProperty $data.groupingField `
+                    |% { Add-Member -InputObject $_ -MemberType NoteProperty -Name "LinkId" -Value $linkId -PassThru } `
 					| ConvertTo-FlatObject `
 					| Export-Csv -Encoding UTF8 -NoTypeInformation -Path "$resultsDirectory\$id.csv"
 				$success = $true
+                if ($data.sleepMs) {
+                    start-sleep -m $data.sleepMs
+                }
 			}
 			catch
 			{
 				# we will fall here if any failure occured, no matter of origin: network problem or API reject.
 				# in case of API failure there is no logging of detailed message, just something like "400 Bad Request" or "404 Not Found"
-				Write-Host "Attempt $attemptNumber. $($_.Exception.Message) URI: $($uri.Substring(0, 50))..."
+				Write-Host "Attempt $attemptNumber. $($_.Exception.Message)"
 			}
 		}
 
