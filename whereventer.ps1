@@ -54,7 +54,8 @@ Param(
 	[string]$FailedFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "failed.txt")), # here failed requests links will be written
     [string]$CompletedFile = [System.IO.Path]::GetFullPath((Join-Path (Get-Location) "completed.txt")), # here failed requests links will be written
 	[int]$RetryCount = 1, # how many times retry request on any error
-	[switch]$JustCollectResults) # do not request links, get result from previous crashed run
+	[switch]$JustCollectResults, # do not request links, get result from previous crashed run
+    [int]$SleepMs = 0) # how much to sleep after each successfull request
 
 Set-StrictMode -Version "3.0"	
 $ErrorActionPreference = "Stop"
@@ -133,6 +134,8 @@ try
 		failed = 0;
 		total = $links.Count;
 		currentDir = $PSScriptRoot;
+        sleepMs = $SleepMs;
+        paused = $false;
 	} # $data is just some object with settings and statistics
 
 	# Split-Pipeline gives all links executes the -Script part in parallel. Default parallel degree is processor count.
@@ -152,12 +155,26 @@ try
 
 		while(-not $success -and $attemptNumber -le $data.retryCount) 
 		{
+            if ($host.ui.RawUi.KeyAvailable -and $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown').Character -eq 'p')
+            {
+                Lock-Object $data `
+                {
+                    $data.paused = -not $data.paused
+                    Write-Host Paused = $data.paused
+                }
+            }
+
+            if ($data.paused) {continue;}
+
 			++$attemptNumber;
 			try 
 			{
                 # Parse-Wherevent is located in lib/Commands.dll module
 				Parse-Wherevent -Url $uri -Proxy $data.proxy | Export-Csv -Encoding UTF8 -NoTypeInformation -Path "$resultsDirectory\$id.csv"
 				$success = $true
+                if ($data.sleepMs) {
+                    start-sleep -m $data.sleepMs
+                }
 			}
 			catch
 			{

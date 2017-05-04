@@ -110,6 +110,7 @@ try
 		currentDir = $PSScriptRoot;
 		groupingField = $GroupingField;
         sleepMs = $SleepMs;
+        paused = $false;
 	} # $data is just some object with settings and statistics
 	
 	# Split-Pipeline gives all links executes the -Script part in parallel. Default parallel degree is processor count.
@@ -129,7 +130,18 @@ try
 		$id = [System.Guid]::NewGuid() # result of request will be stored in file with this id
 
 		while(-not $success -and $attemptNumber -le $data.retryCount) 
-		{		
+		{
+            if ($host.ui.RawUi.KeyAvailable -and $host.UI.RawUI.ReadKey('NoEcho,IncludeKeyDown').Character -eq 'p')
+            {
+                Lock-Object $data `
+                {
+                    $data.paused = -not $data.paused
+                    Write-Host Paused = $data.paused
+                }
+            }
+
+            if ($data.paused) {continue;}
+
 			++$attemptNumber;
 			try 
 			{
