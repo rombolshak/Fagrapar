@@ -2,11 +2,11 @@
 Here it is description of what and how this script do.
 
 For normal use case it should be called in the way below.
-. .\whereventer.ps1 -InputFile C:\some\dir\to\file\with\links.txt -Proxy http://proxy.domain.com:8080 
+. .\regexer.ps1 -InputFile C:\some\dir\to\file\with\links.txt -RegexFile C:\dir\to\expr.txt -Proxy http://proxy.domain.com:8080 
 This will generate file named results.csv in current directory. If there were any unsuccessful requests, file failed.txt wll be generated.
 
 If you want another results file, specify it with -OutputFile parameter. 
-Example: . .\whereventer.ps1 -InputFile .\links.txt -Proxy http://1.2.3.4:9000 -OutputFile G:\dir1\dir2\waka-waka.csv
+Example: . .\regexer.ps1 -InputFile .\links.txt -Proxy http://1.2.3.4:9000 -OutputFile G:\dir1\dir2\waka-waka.csv
 
 Same applies to error file, specify it with -FailedFile param, and completed urls file, -CompletedFile param.
 
@@ -25,10 +25,10 @@ It will concatenate all the files in this directory and remove them afterwards.
 Note that you have to specify input file and proxy even if they are not required for this operation.
 Also -OutputFile should be passed in the same way it was before crash.
 i.e: 
-1) script was started with . .\whereventer.ps1 -InputFile .\links.txt -Proxy proxy -OutputFile .\out.csv
+1) script was started with . .\regexer.ps1 -InputFile .\links.txt -Proxy proxy -OutputFile .\out.csv
 2) pc crashes
 3) you now have directory .\out with some csv files
-4) run . .\whereventer.ps1 -InputFile 'nomatter' -Proxy 'whocares' -OutputFile .\out.csv -JustCollectResults
+4) run . .\regexer.ps1 -InputFile 'nomatter' -Proxy 'whocares' -OutputFile .\out.csv -JustCollectResults
 5) out.csv is generated, out directory is removed, no additional requests were made.
 
 Each successfully processed link is placed to special file (-CompletedFile param, completed.txt by default).
@@ -127,8 +127,6 @@ try
 	    Get-ChildItem $resultsDirectory | Remove-Item -Force
     }
 
-
-
 	$data = @{
 		proxy = $Proxy; 
 		retryCount = $RetryCount;
@@ -139,7 +137,7 @@ try
         sleepMs = $SleepMs;
         paused = $false;
         expressions = $expressions;
-	} # $data is just some object with settings and statistics
+	} # data is just some object with settings and statistics
 
 	# Split-Pipeline gives all links executes the -Script part in parallel. Default parallel degree is processor count.
 	# You may want to increase it, so specify -Count parameter before -Variable (i.e Split-Pipeline -Count 10 -Variable ...)
@@ -150,7 +148,6 @@ try
 
 		# from here starts processing of one link 
 		Import-Module "$($data.currentDir)\lib\LockObject"
-		Import-Module "$($data.currentDir)\lib\Commands.dll"
 		$uri = $_
 		$attemptNumber = 0
 		$success = $false
@@ -173,19 +170,25 @@ try
 			try 
 			{
 				$content = (Invoke-WebRequest -Uri $uri `
-					-Proxy $data.proxy -ProxyUseDefaultCredentials).Content
+					 -Proxy $data.proxy -ProxyUseDefaultCredentials).Content
                 
                 $groups = @()
-                $data.expressions |% { [regex]$_ } |% { $groups += ,$_.Matches($content).Groups }
+                $data.expressions |% { [regex]$_ } |% { $m = $_.Matches($content); $groups += ,$(if ($m.Groups) {$m.Groups} else {@()}) }
                 $maxMatches = $groups |% {$_.Count } | Sort -Descending | Select -First 1;
                 
                 0..($maxMatches - 1) |% `
                 {
-                    $m = $_
-                    $obj = New-Object System.Object
-                    $obj | Add-Member -MemberType NoteProperty -Name Url -Value $uri
-                    0..($groups.Count - 1) |% { $obj | Add-Member -MemberType NoteProperty -Name "Regex #$_" -Value $groups[$_][$m].Value }
-                    $obj
+                    if ($_ -ge 0)
+                    {
+                        $m = $_
+                        $obj = New-Object System.Object
+                        $obj | Add-Member -MemberType NoteProperty -Name Url -Value $uri
+                        0..($groups.Count - 1) |% { 
+                            $obj | Add-Member -MemberType NoteProperty -Name "Regex #$_" `
+                                  -Value $(if ($groups[$_].Count -gt $m) {$groups[$_][$m].Value} else {''} )                        
+                        }
+                        $obj
+                    }
                 } `
                 | Export-Csv -Encoding UTF8 -NoTypeInformation -Path "$resultsDirectory\$id.csv"
 
